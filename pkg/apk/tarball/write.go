@@ -20,10 +20,12 @@ import (
 	"context"
 	"crypto/sha1" //nolint:gosec
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"strconv"
 	"syscall"
 
 	"go.opentelemetry.io/otel"
@@ -153,10 +155,21 @@ func (c *Context) writeTar(ctx context.Context, tw *tar.Writer, fsys fs.FS, user
 		header.ModTime = c.SourceDateEpoch
 		header.ChangeTime = c.SourceDateEpoch
 
+		// extract ownership and permissions from gRPC FUSE xattr if enabled
+		if c.useGRPCFUSEOwnership {
+			if ownership, ok := c.getGRPCFUSEOwnership(fsys, path); ok {
+				header.Uid = ownership.UID
+				header.Gid = ownership.GID
+				header.Mode = ownership.Mode
+			} else {
+				header.Uid = 0
+				header.Gid = 0
+			}
+		}
+
 		if uid, ok := c.remapUIDs[header.Uid]; ok {
 			header.Uid = uid
 		}
-
 		if gid, ok := c.remapGIDs[header.Gid]; ok {
 			header.Gid = gid
 		}
@@ -335,4 +348,35 @@ func (c *Context) WriteTar(ctx context.Context, dst io.Writer, src fs.FS, userin
 	}
 
 	return nil
+}
+
+type gRPCFUSEOwnership struct {
+	UID  int   `json:"UID"`
+	GID  int   `json:"GID"`
+	Mode int64 `json:"Mode"`
+}
+
+func (c *Context) getGRPCFUSEOwnership(fsys fs.FS, path string) (gRPCFUSEOwnership, bool) {
+	xfs, ok := fsys.(apkfs.XattrFS)
+	if !ok {
+		return gRPCFUSEOwnership{}, false
+	}
+
+	value, err := xfs.GetXattr(path, "com.docker.grpcfuse.ownership")
+	if err != nil {
+		return gRPCFUSEOwnership{}, false
+	}
+
+	var ownership gRPCFUSEOwnership
+	if err := json.Unmarshal(value, &ownership); err != nil {
+		return gRPCFUSEOwnership{}, false
+	}
+
+	octalMode := fmt.Sprintf("%d", ownership.Mode)
+	ownership.Mode, err = strconv.ParseInt(octalMode, 8, 64)
+	if err != nil {
+		return gRPCFUSEOwnership{}, false
+	}
+
+	return ownership, true
 }

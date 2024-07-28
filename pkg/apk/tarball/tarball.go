@@ -20,17 +20,18 @@ import (
 )
 
 type Context struct {
-	SourceDateEpoch time.Time
-	OverrideUIDGID  bool
-	UID             int
-	GID             int
-	OverrideUname   string
-	OverrideGname   string
-	SkipClose       bool
-	UseChecksums    bool
-	remapUIDs       map[int]int
-	remapGIDs       map[int]int
-	overridePerms   map[string]tar.Header
+	SourceDateEpoch      time.Time
+	OverrideUIDGID       bool
+	UID                  int
+	GID                  int
+	OverrideUname        string
+	OverrideGname        string
+	SkipClose            bool
+	UseChecksums         bool
+	remapUIDs            map[int]int
+	remapGIDs            map[int]int
+	overridePerms        map[string]tar.Header
+	useGRPCFUSEOwnership bool
 }
 
 type Option func(*Context) error
@@ -62,6 +63,14 @@ func WithOverrideUIDGID(uid, gid int) Option {
 		ctx.OverrideUIDGID = true
 		ctx.UID = uid
 		ctx.GID = gid
+		return nil
+	}
+}
+
+// WithGRPCFUSEOwnership enables the usage of the gRPC FUSE xattr for file permissions.
+func WithGRPCFUSEOwnership() Option {
+	return func(ctx *Context) error {
+		ctx.useGRPCFUSEOwnership = true
 		return nil
 	}
 }
