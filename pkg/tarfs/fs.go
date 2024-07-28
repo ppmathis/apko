@@ -121,6 +121,13 @@ func (m *memFS) WriteHeader(hdr tar.Header, tfs fs.FS, pkg *apk.Package) (bool, 
 			return false, fmt.Errorf("error creating directory %s: %w", hdr.Name, err)
 		}
 
+		// adjust ownership when uid / gid are set in header
+		if hdr.Uid != 0 || hdr.Gid != 0 {
+			if err := m.Chown(hdr.Name, hdr.Uid, hdr.Gid); err != nil {
+				return false, fmt.Errorf("error changing ownership of %s: %w", hdr.Name, err)
+			}
+		}
+
 		for k, v := range hdr.PAXRecords {
 			if !strings.HasPrefix(k, xattrTarPAXRecordsPrefix) {
 				continue
@@ -152,6 +159,13 @@ func (m *memFS) WriteHeader(hdr tar.Header, tfs fs.FS, pkg *apk.Package) (bool, 
 		installed, err := m.writeHeader(hdr.Name, te)
 		if err != nil {
 			return false, fmt.Errorf("writing header for %q: %w", hdr.Name, err)
+		}
+
+		// adjust ownership when uid / gid are set in header
+		if hdr.Uid != 0 || hdr.Gid != 0 {
+			if err := m.Chown(hdr.Name, hdr.Uid, hdr.Gid); err != nil {
+				return false, fmt.Errorf("error changing ownership of %s: %w", hdr.Name, err)
+			}
 		}
 
 		for k, v := range hdr.PAXRecords {

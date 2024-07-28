@@ -244,6 +244,13 @@ func (a *APK) installAPKFiles(ctx context.Context, in io.Reader, pkg *Package) (
 				a.installedFiles[header.Name] = pkg
 			}
 
+			// ownership
+			if header.Uid != 0 || header.Gid != 0 {
+				if err := a.fs.Chown(header.Name, header.Uid, header.Gid); err != nil {
+					return nil, fmt.Errorf("error changing ownership of %s: %w", header.Name, err)
+				}
+			}
+
 		case tar.TypeSymlink:
 			// some underlying filesystems and some memfs that we use in tests do not support symlinks.
 			// attempt it, and if it fails, just copy it.
